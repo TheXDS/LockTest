@@ -1,67 +1,79 @@
-﻿using System;
+﻿// Program.cs
+// 
+// Author(s):
+//      Cesar Morgan Recinos <xds_xps_ivx@hotmail.com>
+// 
+// Copyright (c) 2018 - 2018 Cesar Morgan Recinos
+// 
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU General Public License as published by the Free Software
+// Foundation, either version 3 of the License, or (at your option) any later
+// version.
+// 
+// This program is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+// PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License along with
+// this program. If not, see <http://www.gnu.org/licenses/>.
+
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace LockTest
 {
-    class Program
+    internal static class Program
     {
-        static async Task Main(string[] args)
+        private static async Task Main(string[] args)
         {
-
             var c = new Crasher();
-            await c.HangAsync();
-
-
+            await c.HangAsync(5);
+            Console.WriteLine("Fin de la app. Presione cualquier tecla para salir.");
+            Console.ReadKey();
         }
-
-
     }
 
-    class Crasher
+    internal class Crasher
     {
-        private int _counter= 0;
-        private object _lock = new object();
-
-        public Task HangAsync()
+        private int _counter;
+        private readonly object _lock = new object();
+        public void Hang(int hangMilliseconds)
         {
-            var t1 = Task.Run((Action)Hang);
-            var t2 = Task.Run((Action)Hang);
-            return Task.WhenAll(t1, t2);
+            var thread = ++_counter;
+            Console.WriteLine($"Hilo {thread} a la espera");
+
+            lock (_lock)
+            {
+                Console.WriteLine($"Inicio de hilo {thread}... Hang {hangMilliseconds} ms!");
+
+                var task = Task.Run(() =>
+                {
+                    // Simula una operación cualquiera en el objeto bloqueado.
+                    var _ = _lock.ToString();
+
+                    // Este bloque intencionalmente bloquea la ejecución.
+                    Thread.Sleep(hangMilliseconds);
+                });
+
+                Console.WriteLine(task.Wait(TimeSpan.FromMilliseconds(10000))
+                    ? $"Fin de hilo {thread}"
+                    : $"Abortar hilo {thread}");
+                
+            }
         }
 
-
-
-        public void Hang()
+        public Task HangAsync(int threads)
         {
-            if (Monitor.TryEnter(_lock, 10000))
-            {
-                try
-                {
-                    Console.WriteLine($"Inicio de hilo {++_counter}... Hang!");
+            var rnd = new Random();
+            var tasks = new HashSet<Task>();
 
-                    var task = Task.Run(() =>
-                    {
-                        while (true) ;
-                    });
-
-                    if (task.Wait(TimeSpan.FromSeconds(20)))
-                        Console.WriteLine($"Fin de hilo {_counter--}");
-                    else
-                        Console.WriteLine($"Abortar hilo {_counter--}");
-                }
-                finally
-                {
-                    Monitor.Exit(_lock);
-                }
-            }
-            else
+            for (var j = 1; j <= threads; j++)
             {
-                Console.WriteLine($"Hilo {_counter+1} no entró.");
+                tasks.Add(Task.Run(() => Hang(rnd.Next(3000, 12000))));
             }
+            return Task.WhenAll(tasks);
         }
     }
 }
